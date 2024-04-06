@@ -79,7 +79,7 @@ void setup(void) {
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
-  delay(9500);
+  delay(8500);
 }
 
 void displayTemperature(const char* label, int16_t temp, const char* unit) {
@@ -108,7 +108,7 @@ void loop(void) {
   }
 
   do {
-    if (x_position > 128) { // Once the bitmap moves off the screen
+    if (x_position > 168) { // Once the bitmap moves off the screen
       static unsigned long lastDebounceTime = 0;
       static int lastButtonState = HIGH;
       static int buttonState;

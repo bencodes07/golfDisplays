@@ -126,7 +126,7 @@ void loop(void) {
   }
 
   do {
-    if (x_position > 512+128) { // Once the bitmap moves off the screen
+    if (x_position > 512+165) { // Once the bitmap moves off the screen
       static unsigned long lastDebounceTime = 0;
       static int lastButtonState = HIGH;
       static int buttonState;
