@@ -19,6 +19,10 @@ MCP2515 mcp2515(10); // CS Pin 10
 unsigned long previousMillis = 0;
 const long interval = 500;
 
+// NO EMU Display
+unsigned long lastReceivedTime = 0; // Timer to track last received message time
+const unsigned long requiredInterval = 5000; // 5 seconds interval
+
 const bool demoMode = true;
 
 U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCK, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
@@ -101,10 +105,11 @@ void displayTemperature(const char* label, int16_t temp, const char* unit) {
 
 void loop(void) {
   u8g2.firstPage();
-
-  // Call the EMUcan lib with every received frame:
   if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
     emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
+    if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+      lastReceivedTime = millis();
+    }
   }
 
   do {
@@ -133,7 +138,7 @@ void loop(void) {
       lastButtonState = reading;
 
       if (!demoMode) {
-        if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+        if (millis() - lastReceivedTime < requiredInterval) {
           if (mode == 1) {
             displayTemperature("CLT", emucan.emu_data.CLT, "C");
           } else if (mode == 2) {
