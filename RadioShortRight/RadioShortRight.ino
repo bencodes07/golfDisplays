@@ -17,7 +17,7 @@ const unsigned char turbo_bitmap [] PROGMEM = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-const bool demoMode = true;
+const bool demoMode = false;
 
 // EmuCan
 #include "EMUcan.h"
@@ -52,14 +52,14 @@ void setup(void) {
 void loop()
 {
   u8g2.firstPage();
-  if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-    emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
-    if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
-      lastReceivedTime = millis();
-    }
-  }
 
-  do {
+  while (u8g2.nextPage()) {
+    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+      emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
+      if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+        lastReceivedTime = millis();
+      }
+    }  
     static unsigned long lastDebounceTime = 0;
     static int lastButtonState = HIGH;
     static int buttonState;
@@ -117,7 +117,7 @@ void loop()
         u8g2.drawUTF8(0, 26, buffer);
       }
     }
-  } while(u8g2.nextPage());
+  }
 
   delay(10); // Delay between frames
 }

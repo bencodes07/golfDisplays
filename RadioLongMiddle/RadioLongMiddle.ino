@@ -1,13 +1,6 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 
-#ifdef U8X8_HAVE_HW_SPI
-#include <SPI.h>
-#endif
-#ifdef U8X8_HAVE_HW_I2C
-#include <Wire.h>
-#endif
-
 // EmuCan
 #include "EMUcan.h"
 EMUcan emucan(0x600); // Base ID 600 --> See EMU settings
@@ -23,7 +16,7 @@ const long interval = 500;
 unsigned long lastReceivedTime = 0; // Timer to track last received message time
 const unsigned long requiredInterval = 5000; // 5 seconds interval
 
-const bool demoMode = true;
+const bool demoMode = false;
 
 U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCK, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
 
@@ -72,7 +65,6 @@ void draw_golf() {
 }
 
 void draw(void) {
-  u8g2_prepare();
   draw_golf();
 }
 
@@ -83,6 +75,7 @@ void setup(void) {
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
+  u8g2_prepare();
   delay(8500);
 }
 
@@ -105,15 +98,14 @@ void displayTemperature(const char* label, int16_t temp, const char* unit) {
 
 void loop(void) {
   u8g2.firstPage();
-  if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-    emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
-    if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
-      lastReceivedTime = millis();
-    }
-  }
-
-  do {
+  while (u8g2.nextPage()) {
     if (x_position > 168) { // Once the bitmap moves off the screen
+      if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+        emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
+        if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+          lastReceivedTime = millis();
+        }
+      }
       static unsigned long lastDebounceTime = 0;
       static int lastButtonState = HIGH;
       static int buttonState;
@@ -166,13 +158,12 @@ void loop(void) {
           displayTemperature("MAP", 215, "kPa");
         }
       }
+    } else {
+      draw();
+      x_position += 2; // Move the bitmap to the right
+      delay(10);
     }
-    draw();
-  } while(u8g2.nextPage());
-
-  x_position += 2; // Move the bitmap to the right
-
-  delay(10); // Delay between frames
+  }
 }
 
 
