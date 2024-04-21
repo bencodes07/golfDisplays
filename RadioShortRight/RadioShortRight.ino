@@ -45,7 +45,7 @@ void setup(void) {
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
-  delay(18000);
+  delay(12000);
   mode = 1;
 }
 
@@ -53,7 +53,7 @@ void loop()
 {
   u8g2.firstPage();
 
-  while (u8g2.nextPage()) {
+  do {
     if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
       emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
       if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
@@ -117,7 +117,5 @@ void loop()
         u8g2.drawUTF8(0, 26, buffer);
       }
     }
-  }
-
-  delay(10); // Delay between frames
+  } while(u8g2.nextPage());
 }

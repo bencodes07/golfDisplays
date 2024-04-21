@@ -117,7 +117,7 @@ void displayTemperature(const char* label, uint16_t tempInt, const char* unit, b
 void loop(void) {
   u8g2.firstPage();
   while(u8g2.nextPage()) {
-    if (x_position > 512+165) { // Once the bitmap moves off the screen
+    if (x_position > 488) { // Once the bitmap moves off the screen & extra time
       if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
         emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
         if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
@@ -179,7 +179,7 @@ void loop(void) {
     } else {
       draw();
       x_position += 2; // Move the bitmap to the right
-      delay(10);
+      delay(30);
     }
   }
 }

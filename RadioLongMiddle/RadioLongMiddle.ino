@@ -76,7 +76,7 @@ void setup(void) {
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
   u8g2_prepare();
-  delay(8500);
+  delay(6000);
 }
 
 void displayTemperature(const char* label, int16_t temp, const char* unit) {
@@ -161,7 +161,7 @@ void loop(void) {
     } else {
       draw();
       x_position += 2; // Move the bitmap to the right
-      delay(10);
+      delay(30);
     }
   }
 }
