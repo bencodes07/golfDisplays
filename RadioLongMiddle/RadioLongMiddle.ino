@@ -75,6 +75,8 @@ void setup(void) {
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
+  pinMode(6, OUTPUT);
+  pinMode(5, INPUT_PULLUP);
   u8g2_prepare();
   delay(6000);
 }
@@ -96,9 +98,36 @@ void displayTemperature(const char* label, int16_t temp, const char* unit) {
     u8g2.drawUTF8(unitXPos, 10, buffer);
 }
 
+bool toggleValue = false;
+
 void loop(void) {
   u8g2.firstPage();
   while (u8g2.nextPage()) {
+    static unsigned long lastToggleDebounceTime = 0;
+    static int lastToggleButtonState = HIGH;
+    static int toggleButtonState;
+    const long toggleDebounceDelay = 50; // 50 ms debounce time
+
+    int toggleReading = digitalRead(5);
+
+    if (toggleReading != lastToggleButtonState) {
+      lastToggleDebounceTime = millis();
+    }
+
+    if ((millis() - lastToggleDebounceTime) > toggleDebounceDelay) {
+      if (toggleReading != toggleButtonState) {
+        toggleButtonState = toggleReading;
+        if(lastToggleButtonState == 0) {
+          toggleValue = !toggleValue;
+          digitalWrite(6, !toggleValue);
+          Serial.println("Button Toggled");
+          Serial.println(digitalRead(6));
+        }
+      }
+    }
+    
+    lastToggleButtonState = toggleReading;
+
     if (x_position > 168) { // Once the bitmap moves off the screen
       if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
         emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);

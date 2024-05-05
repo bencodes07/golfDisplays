@@ -45,15 +45,44 @@ void setup(void) {
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
   pinMode(7, INPUT_PULLUP);
+  pinMode(6, OUTPUT);
+  pinMode(5, INPUT_PULLUP);
   delay(12000);
   mode = 1;
 }
+
+bool toggleValue = false;
 
 void loop()
 {
   u8g2.firstPage();
 
   do {
+    static unsigned long lastToggleDebounceTime = 0;
+    static int lastToggleButtonState = HIGH;
+    static int toggleButtonState;
+    const long toggleDebounceDelay = 50; // 50 ms debounce time
+
+    int toggleReading = digitalRead(5);
+
+    if (toggleReading != lastToggleButtonState) {
+      lastToggleDebounceTime = millis();
+    }
+
+    if ((millis() - lastToggleDebounceTime) > toggleDebounceDelay) {
+      if (toggleReading != toggleButtonState) {
+        toggleButtonState = toggleReading;
+        if(lastToggleButtonState == 0) {
+          toggleValue = !toggleValue;
+          digitalWrite(6, !toggleValue);
+          Serial.println("Button Toggled");
+          Serial.println(digitalRead(6));
+        }
+      }
+    }
+    
+    lastToggleButtonState = toggleReading;
+
     if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
       emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
       if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
