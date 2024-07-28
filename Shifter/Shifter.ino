@@ -14,9 +14,11 @@ GearPosition targetPosition = P;
 
 const int numPositions = 6;
 const int positionPins[numPositions] = {2, 3, 4, 5, 6, 7};
+const int upshiftPin = 8;
+const int downshiftPin = 9;
 
 unsigned long lastPositionChangeTime = 0;
-const unsigned long positionChangeDelay = 200;
+const unsigned long positionChangeDelay = 100; // Adjust this value as needed
 
 void setup()
 {
@@ -57,23 +59,25 @@ void setVoltageForPosition(GearPosition position) {
   Serial.println(" selected");
 }
 
-void handleManualMode() {
+void handleManualShifting() {
   static bool upshiftPressed = false;
   static bool downshiftPressed = false;
 
-  if (digitalRead(8) == LOW && !upshiftPressed) {
+  if (digitalRead(upshiftPin) == LOW && !upshiftPressed) {
     dac.setVoltage(2.9 * refV / 5.0, false);
     upshiftPressed = true;
     Serial.println("Upshift pressed");
-  } else if (digitalRead(8) == HIGH && upshiftPressed) {
+  } else if (digitalRead(upshiftPin) == HIGH && upshiftPressed) {
+    setVoltageForPosition(M);  // Reset to M position voltage
     upshiftPressed = false;
   }
 
-  if (digitalRead(9) == LOW && !downshiftPressed) {
+  if (digitalRead(downshiftPin) == LOW && !downshiftPressed) {
     dac.setVoltage(3.3 * refV / 5.0, false);
     downshiftPressed = true;
     Serial.println("Downshift pressed");
-  } else if (digitalRead(9) == HIGH && downshiftPressed) {
+  } else if (digitalRead(downshiftPin) == HIGH && downshiftPressed) {
+    setVoltageForPosition(M);  // Reset to M position voltage
     downshiftPressed = false;
   }
 }
@@ -92,7 +96,8 @@ void loop()
     setVoltageForPosition(currentPosition);
   }
   
+  // Handle manual shifting immediately, without delay
   if (currentPosition == M) {
-    handleManualMode();
+    handleManualShifting();
   }
 }
