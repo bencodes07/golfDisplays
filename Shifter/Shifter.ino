@@ -5,112 +5,94 @@ const int refV = 4124;
 const int I2C_ADDR = 0x60;
 Adafruit_MCP4725 dac;
 
+enum GearPosition {
+  P, R, N, D, S, M
+};
+
+GearPosition currentPosition = P;
+GearPosition targetPosition = P;
+
+const int numPositions = 6;
+const int positionPins[numPositions] = {2, 3, 4, 5, 6, 7};
+
+unsigned long lastPositionChangeTime = 0;
+const unsigned long positionChangeDelay = 200;
+
 void setup()
 {
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(6, INPUT_PULLUP);
-  pinMode(7, INPUT_PULLUP);
-  pinMode(8, INPUT_PULLUP);
-  pinMode(9, INPUT_PULLUP);
+  for (int i = 2; i <= 9; i++) {
+    pinMode(i, INPUT_PULLUP);
+  }
   Serial.begin(9600);
   Wire.begin();
   dac.begin(I2C_ADDR);
   delay(100);
-  dac.setVoltage(0.5 * refV / 5.0, false);
+  setVoltageForPosition(P);
 }
 
-int buttonPStatus = 1;
-int buttonRStatus = 1;
-int buttonNStatus = 1;
-int buttonDStatus = 1;
-int buttonSStatus = 1;
-int buttonMStatus = 1;
-int buttonPlusStatus = 1;
-int buttonMinusStatus = 1;
+GearPosition getLeverPosition() {
+  for (int i = 0; i < numPositions; i++) {
+    if (digitalRead(positionPins[i]) == LOW) {
+      return static_cast<GearPosition>(i);
+    }
+  }
+  return currentPosition;
+}
 
-bool upshiftPressed = false;
-bool downshiftPressed = false;
+void setVoltageForPosition(GearPosition position) {
+  float voltage = 0.0;
+  const char* positionName = "";
 
-bool manualSelected = false;
+  switch (position) {
+    case P: voltage = 0.5; positionName = "P"; break;
+    case R: voltage = 0.9; positionName = "R"; break;
+    case N: voltage = 1.3; positionName = "N"; break;
+    case D: voltage = 1.7; positionName = "D"; break;
+    case S: voltage = 2.1; positionName = "S"; break;
+    case M: voltage = 2.5; positionName = "M"; break;
+  }
+
+  dac.setVoltage(voltage * refV / 5.0, false);
+  Serial.print(positionName);
+  Serial.println(" selected");
+}
+
+void handleManualMode() {
+  static bool upshiftPressed = false;
+  static bool downshiftPressed = false;
+
+  if (digitalRead(8) == LOW && !upshiftPressed) {
+    dac.setVoltage(2.9 * refV / 5.0, false);
+    upshiftPressed = true;
+    Serial.println("Upshift pressed");
+  } else if (digitalRead(8) == HIGH && upshiftPressed) {
+    upshiftPressed = false;
+  }
+
+  if (digitalRead(9) == LOW && !downshiftPressed) {
+    dac.setVoltage(3.3 * refV / 5.0, false);
+    downshiftPressed = true;
+    Serial.println("Downshift pressed");
+  } else if (digitalRead(9) == HIGH && downshiftPressed) {
+    downshiftPressed = false;
+  }
+}
 
 void loop()
 {
-  int pin2Value = digitalRead(2);
-  int pin3Value = digitalRead(3);
-  int pin4Value = digitalRead(4);
-  int pin5Value = digitalRead(5);
-  int pin6Value = digitalRead(6);
-  int pin7Value = digitalRead(7);
-  int pin8Value = digitalRead(8);
-  int pin9Value = digitalRead(9);
+  GearPosition leverPosition = getLeverPosition();
+  
+  if (leverPosition != targetPosition) {
+    targetPosition = leverPosition;
+    lastPositionChangeTime = millis();
+  }
 
-  if (buttonMStatus != pin7Value)
-  {
-    buttonMStatus = pin7Value;
-    manualSelected = true;
-    dac.setVoltage(2.5 * refV / 5.0, false);
-    Serial.println("M pressed");
-  } else if (buttonMStatus == pin7Value && manualSelected) {
-
-    if (buttonPlusStatus != pin8Value && !upshiftPressed)
-    {
-      dac.setVoltage(2.9 * refV / 5.0, false);
-      upshiftPressed = true;
-      delay(50);
-      Serial.println("Upshift pressed");
-    } 
-    if (buttonPlusStatus == pin8Value && upshiftPressed) {
-      buttonMStatus = !pin7Value;
-      upshiftPressed = false;
-    }
-    if (buttonMinusStatus != pin9Value && !downshiftPressed)
-    {
-      dac.setVoltage(3.3 * refV / 5.0, false);
-      downshiftPressed = true;
-      delay(50);
-      Serial.println("Downshift pressed");
-    } 
-    if (buttonMinusStatus == pin9Value && downshiftPressed) {
-      buttonMStatus = !pin7Value;
-      downshiftPressed = false;
-    }
+  if (targetPosition != currentPosition && (millis() - lastPositionChangeTime >= positionChangeDelay)) {
+    currentPosition = targetPosition;
+    setVoltageForPosition(currentPosition);
   }
-  if (buttonPStatus != pin2Value)
-  {
-    buttonPStatus = pin2Value;
-    manualSelected = false;
-    dac.setVoltage(0.5 * refV / 5.0, false);
-    Serial.println("P pressed");
-  }
-  if (buttonRStatus != pin3Value)
-  {
-    buttonRStatus = pin3Value;
-    manualSelected = false;
-    dac.setVoltage(0.9 * refV / 5.0, false);
-    Serial.println("R pressed");
-  }
-  if (buttonNStatus != pin4Value)
-  {
-    buttonNStatus = pin4Value;
-    manualSelected = false;
-    dac.setVoltage(1.3 * refV / 5.0, false);
-    Serial.println("N pressed");
-  }
-  if (buttonDStatus != pin5Value)
-  {
-    buttonDStatus = pin5Value;
-    manualSelected = false;
-    dac.setVoltage(1.7 * refV / 5.0, false);
-    Serial.println("D pressed");
-  }
-  if (buttonSStatus != pin6Value)
-  {
-    buttonSStatus = pin6Value;
-    manualSelected = false;
-    dac.setVoltage(2.1 * refV / 5.0, false);
-    Serial.println("S pressed");
+  
+  if (currentPosition == M) {
+    handleManualMode();
   }
 }
