@@ -26,7 +26,7 @@ struct can_frame canMsg;
 MCP2515 mcp2515(10); // CS Pin 10
 
 unsigned long previousMillis = 0;
-const long interval = 500;
+const long interval = 50;
 
 void setup()
 {
@@ -54,8 +54,9 @@ void setup()
   delay(1000);
 }
 
-unsigned long displayStartTime = 0;
 bool displaySavedResult = false;
+
+uint16_t savedMapValue = -1.0;
 
 void loop()
 {
@@ -70,47 +71,67 @@ void loop()
     if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
       uint16_t mapValue = emucan.emu_data.MAP;
       float currMapBar = mapValue;
-      uint16_t savedMapValue = -1.0;
 
-      if (mapValue > 180 && mapValue > savedMapValue) // Display when Map reaches 0.8 Bar
+      if (mapValue > 160 && mapValue > savedMapValue) // Display when Map reaches 0.6 Bar
       {
-        savedMapValue = mapValue; // Save the value when it goes above 1
-        displayStartTime = millis(); // Record the time when the value goes above 1
+        savedMapValue = mapValue;
+      } 
+      
+      if (mapValue < 100 && mapValue < savedMapValue) 
+      {
         displaySavedResult = true; // Set the flag to display the saved result
       }
 
       if (displaySavedResult)
       {
-        // Display Maximum MAP Value
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_logisoso26_tr);
-        u8g2.setCursor(-2, 28);
-        u8g2.print(currMapBar / 100 - 1);
-        u8g2.sendBuffer();
-
-        delay(1000);
-
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_logisoso20_tr);
-        u8g2.setCursor(-2, 28);
-        u8g2.print("  bar");
-        u8g2.sendBuffer();
-
-        delay(400);
-
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_logisoso20_tr);
-        u8g2.setCursor(-2, 28);
-        u8g2.print("boost");
-        u8g2.sendBuffer();
-
-        delay(400);
-
-        if (millis() - displayStartTime >= 5000) // Display the saved value for 5 seconds
+        for (int i = 0; i < 3; i++)
         {
-          displaySavedResult = false; // Reset the flag
-          savedMapValue = -1;
+          for (int i = 0; i < 3; i++)
+          {
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_logisoso26_tr);
+            u8g2.setCursor(-2, 28);
+            u8g2.print(currMapBar / 100 - 1);
+            u8g2.sendBuffer();
+
+            delay(500);
+
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_logisoso26_tr);
+            u8g2.setCursor(-2, 28);
+            u8g2.print();
+            u8g2.sendBuffer();
+
+            delay(200);
+          }
+
+          u8g2.clearBuffer();
+          u8g2.setFont(u8g2_font_logisoso26_tr);
+          u8g2.setCursor(-2, 28);
+          u8g2.print(currMapBar / 100 - 1);
+          u8g2.sendBuffer();
+
+          delay(500);
+
+          u8g2.clearBuffer();
+          u8g2.setFont(u8g2_font_logisoso20_tr);
+          u8g2.setCursor(-2, 28);
+          u8g2.print("  bar");
+          u8g2.sendBuffer();
+
+          delay(200);
+
+          u8g2.clearBuffer();
+          u8g2.setFont(u8g2_font_logisoso20_tr);
+          u8g2.setCursor(-2, 28);
+          u8g2.print("boost");
+          u8g2.sendBuffer();
+
+          delay(400);
         }
+       
+        displaySavedResult = false; // Reset the flag
+        savedMapValue = -1;
       } else 
       {
         int8_t currGear = emucan.emu_data.gear;

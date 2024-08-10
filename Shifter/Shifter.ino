@@ -18,7 +18,7 @@ const int upshiftPin = 8;
 const int downshiftPin = 9;
 
 unsigned long lastPositionChangeTime = 0;
-const unsigned long positionChangeDelay = 100; // Adjust this value as needed
+const unsigned long positionChangeDelay = 400; // Adjust this value as needed
 
 void setup()
 {
