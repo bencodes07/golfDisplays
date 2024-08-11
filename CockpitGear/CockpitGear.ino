@@ -72,7 +72,7 @@ void loop()
     if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
       uint16_t mapValue = emucan.emu_data.MAP;
 
-      if (mapValue > 101 && mapValue > savedMapValue && mapValue < 400) // Display when Map reaches 0.6 Bar
+      if (mapValue > 150 && mapValue > savedMapValue && mapValue < 400) // Display when Map reaches 0.6 Bar
       {
         savedMapValue = mapValue;
         savedMapFloat = savedMapValue;
