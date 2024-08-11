@@ -56,7 +56,8 @@ void setup()
 
 bool displaySavedResult = false;
 
-uint16_t savedMapValue = -1.0;
+uint16_t savedMapValue = 10;
+float savedMapFloat = 10;
 
 void loop()
 {
@@ -70,19 +71,24 @@ void loop()
     previousMillis = currentMillis;
     if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
       uint16_t mapValue = emucan.emu_data.MAP;
-      float currMapBar = mapValue;
 
-      if (mapValue > 160 && mapValue > savedMapValue) // Display when Map reaches 0.6 Bar
+      if (mapValue > 101 && mapValue > savedMapValue && mapValue < 400) // Display when Map reaches 0.6 Bar
       {
         savedMapValue = mapValue;
+        savedMapFloat = savedMapValue;
       } 
       
-      if (mapValue < 100 && mapValue < savedMapValue) 
+      if (mapValue < 50 && mapValue < savedMapValue && mapValue < 400) 
       {
         displaySavedResult = true; // Set the flag to display the saved result
       }
 
-      if (displaySavedResult)
+      if(savedMapValue > 400) {
+        savedMapValue = 10;
+        savedMapFloat = savedMapValue;
+      }
+
+      if (displaySavedResult && savedMapValue < 400)
       {
         for (int i = 0; i < 3; i++)
         {
@@ -91,7 +97,7 @@ void loop()
             u8g2.clearBuffer();
             u8g2.setFont(u8g2_font_logisoso26_tr);
             u8g2.setCursor(-2, 28);
-            u8g2.print(currMapBar / 100 - 1);
+            u8g2.print(savedMapFloat / 100 - 1);
             u8g2.sendBuffer();
 
             delay(500);
@@ -108,7 +114,7 @@ void loop()
           u8g2.clearBuffer();
           u8g2.setFont(u8g2_font_logisoso26_tr);
           u8g2.setCursor(-2, 28);
-          u8g2.print(currMapBar / 100 - 1);
+          u8g2.print(savedMapFloat / 100 - 1);
           u8g2.sendBuffer();
 
           delay(500);
@@ -130,8 +136,9 @@ void loop()
           delay(400);
         }
        
+        savedMapValue = 10;
+        savedMapFloat = savedMapValue;
         displaySavedResult = false; // Reset the flag
-        savedMapValue = -1;
       } else 
       {
         int8_t currGear = emucan.emu_data.gear;
@@ -149,9 +156,6 @@ void loop()
 
     } else {
       Serial.println("No communication from EMU");
-    }
-    if (emucan.emu_data.flags1 & emucan.F_IDLE) {
-      Serial.println("Engine Idle active");
     }
     if (emucan.decodeCel()) {
       Serial.println("WARNING Engine CEL active");
