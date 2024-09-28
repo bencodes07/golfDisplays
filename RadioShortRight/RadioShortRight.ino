@@ -115,15 +115,11 @@ void loop()
     if (!demoMode) {
       if (millis() - lastReceivedTime < requiredInterval) {
         if (mode == 1) {
-          char buffer[20];
           u8g2.setFont(u8g2_font_profont22_mf);
-          float myFloat = emucan.emu_data.wboLambda;
-          int whole = (int)myFloat; // Extract whole part
-          int fractional = (int)((myFloat - whole) * 100); // Extract two decimal places
-
-          // Manually construct the floating-point representation
-          snprintf(buffer, sizeof(buffer), "%d.%02d", whole, fractional);
-          u8g2.drawUTF8(0, 26, buffer);
+          // Check the status of CAN switch 4
+          bool canSwitch4Status = emucan.emu_data.outflags2 & EMUcan::OUTFLAGS2::F_CANSW4;
+          const char* statusText = canSwitch4Status ? "LC1" : "LC2";
+          u8g2.drawUTF8(0, 26, statusText);
         }
       } else {
         u8g2.setDrawColor(1);
