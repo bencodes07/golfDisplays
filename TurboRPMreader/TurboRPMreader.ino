@@ -1,31 +1,45 @@
-const int inputPin = 8;  // Digital pin to read from
+#include <Wire.h>
+#include <Adafruit_MCP4725.h>
+
+const int inputPin = 8;
+const int refV = 4124;  // From your existing code
+Adafruit_MCP4725 dac;
+
 unsigned long lastTime = 0;
 unsigned long period = 0;
 
 void setup() {
   pinMode(inputPin, INPUT);
-  Serial.begin(115200);  // High baud rate for faster printing
+  Serial.begin(115200);
+  dac.begin(0x60);  // Default I2C address
 }
 
 void loop() {
-  // Wait for rising edge
   while(!(PINB & (1 << (inputPin - 8)))); 
   unsigned long startTime = micros();
   
-  // Wait for falling edge
   while((PINB & (1 << (inputPin - 8))));
   
   period = micros() - startTime;
   
-  // Calculate frequency
-  float frequency = 10000000.0 / (period * 2);  // Convert to Hz
-  float rpm = (frequency * 60) / 14;
+  float frequency = 10000000.0 / (period * 2);
+  float rpm = (frequency * 60) / 16;
   
-  // Print every 100ms
-  if(millis() - lastTime > 100) {
+  // Convert RPM to voltage (0-5V range)
+  // Adjust maxRPM based on expected range
+  const float maxRPM = 150000.0;
+  float voltage = (rpm / maxRPM) * 5.0;
+  
+  // Set DAC output
+  uint16_t dacValue = (voltage * refV) / 5.0;
+  
+  
+  if(millis() - lastTime > 10) {
+    dac.setVoltage(dacValue, false);
     Serial.print("RPM: ");
     Serial.print(rpm);
-    Serial.println(" rpm");
+    Serial.print(" Voltage: ");
+    Serial.println(voltage);
     lastTime = millis();
   }
 }
