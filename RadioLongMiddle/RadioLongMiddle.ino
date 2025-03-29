@@ -61,7 +61,7 @@ int mode = 1;
 
 void draw_golf() {
   u8g2.setBitmapMode(false /* solid */);
-  u8g2.drawXBMP(x_position, 0, 90, 32, epd_bitmap_image_Golf_1);
+  u8g2.drawXBMP(x_position, 7, 90, 32, epd_bitmap_image_Golf_1);
 }
 
 void draw(void) {

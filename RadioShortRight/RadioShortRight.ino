@@ -1,23 +1,10 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include <U8g2lib.h>
-
 #include <avr/pgmspace.h>
 
-U8G2_SSD1306_64X32_1F_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-
-const unsigned char turbo_bitmap [] PROGMEM = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x3f, 0xc0, 0x00, 0x00, 0x20, 0x20, 0x03, 0x1b, 0x50, 
-	0x30, 0x00, 0x28, 0x50, 0x08, 0x00, 0x60, 0x10, 0x28, 0xfe, 0x90, 0x60, 0x04, 0x81, 0xa3, 0x20, 
-	0x84, 0x2d, 0x42, 0x20, 0x8a, 0x64, 0x46, 0x63, 0x4a, 0xc2, 0x44, 0x4e, 0x42, 0x93, 0x89, 0x18, 
-	0x46, 0x34, 0x8b, 0x01, 0xc4, 0x24, 0x02, 0x01, 0x82, 0xc9, 0x44, 0x00, 0x0a, 0x9b, 0xc5, 0x00, 
-	0x8c, 0x10, 0x81, 0x00, 0x14, 0x67, 0x22, 0x00, 0x10, 0xcc, 0x30, 0x00, 0x28, 0x00, 0x48, 0x00, 
-	0xe0, 0x00, 0x0c, 0x00, 0x80, 0x01, 0x13, 0x00, 0x00, 0x7f, 0x02, 0x00, 0x00, 0xc0, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
-
-const bool demoMode = false;
+// Use a more memory-efficient display configuration
+U8G2_SSD1306_64X32_NONAME_F_HW_I2C u8g2(U8G2_R0);
 
 // EmuCan
 #include "EMUcan.h"
@@ -27,120 +14,245 @@ EMUcan emucan(0x600); // Base ID 600 --> See EMU settings
 struct can_frame canMsg;
 MCP2515 mcp2515(10); // CS Pin 10
 
-unsigned long previousMillis = 0;
-const long interval = 500;
+// Timing constants
+unsigned long prevMillis = 0;
+unsigned long lastReceivedTime = 0;
+unsigned long toggleDisplayTime = 0;
 
-// NO EMU Display
-unsigned long lastReceivedTime = 0; // Timer to track last received message time
-const unsigned long requiredInterval = 5000; // 5 seconds interval
+// Button constants
+#define MODE_BTN_PIN 7     // Button to toggle display on/off
+#define TOGGLE_BTN_PIN 5   // Button to toggle between LC1/LC2
+#define OUTPUT_PIN 6
+#define DEBOUNCE_DELAY 50
 
-int mode = 0;
+// Display states
+enum DisplayState {
+  DISPLAY_OFF,
+  DISPLAY_LD,
+  DISPLAY_LC
+};
+
+// Last values
+float lastAnalogIn6 = -1.0;
+DisplayState displayState = DISPLAY_LD; // Start with LD display on
+bool lcValue = false;      // LC state (false = LC2, true = LC1)
+
+// Button states
+int toggleBtnState = HIGH;
+int lastToggleBtnState = HIGH;
+int modeBtnState = HIGH;
+int lastModeBtnState = HIGH;
+unsigned long lastToggleDbnTime = 0;
+unsigned long lastModeDbnTime = 0;
+
+// LD threshold values adjusted for sensor offset
+const float ldThresholds[] = {1.05, 1.58, 2.05, 2.65, 3.15, 3.75, 4.35, 4.9};
 
 void setup(void) {
+  Serial.begin(9600);
+  Serial.println("Initializing...");
+  
+  // Initialize display
   u8g2.begin();
   u8g2.setDrawColor(1);
   u8g2.setFlipMode(1);
-  Serial.begin(9600);
+  
+  // Initialize CAN
   mcp2515.reset();
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
-  pinMode(7, INPUT_PULLUP);
-  pinMode(6, OUTPUT);
-  pinMode(5, INPUT_PULLUP);
-  delay(12000);
-  mode = 1;
+  
+  // Setup pins - explicit INPUT_PULLUP
+  pinMode(MODE_BTN_PIN, INPUT_PULLUP);
+  pinMode(TOGGLE_BTN_PIN, INPUT_PULLUP);
+  pinMode(OUTPUT_PIN, OUTPUT);
+  
+  // Initial pin state check and debug
+  Serial.print("Initial TOGGLE pin state: ");
+  Serial.println(digitalRead(TOGGLE_BTN_PIN));
+  
+  Serial.print("Initial MODE pin state: ");
+  Serial.println(digitalRead(MODE_BTN_PIN));
+  
+  Serial.println("Setup complete");
 }
 
-bool toggleValue = false;
-
-void loop()
-{
-  u8g2.firstPage();
-
-  do {
-    static unsigned long lastToggleDebounceTime = 0;
-    static int lastToggleButtonState = HIGH;
-    static int toggleButtonState;
-    const long toggleDebounceDelay = 50; // 50 ms debounce time
-
-    int toggleReading = digitalRead(5);
-
-    if (toggleReading != lastToggleButtonState) {
-      lastToggleDebounceTime = millis();
-    }
-
-    if ((millis() - lastToggleDebounceTime) > toggleDebounceDelay) {
-      if (toggleReading != toggleButtonState) {
-        toggleButtonState = toggleReading;
-        if(lastToggleButtonState == 0) {
-          toggleValue = !toggleValue;
-          digitalWrite(6, !toggleValue);
-          Serial.println("Button Toggled");
-          Serial.println(digitalRead(6));
-        }
-      }
-    }
-    
-    lastToggleButtonState = toggleReading;
-
-    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-      emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
-      if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
-        lastReceivedTime = millis();
-      }
-    }  
-    static unsigned long lastDebounceTime = 0;
-    static int lastButtonState = HIGH;
-    static int buttonState;
-    const long debounceDelay = 50; // 50 ms debounce time
-
-    int reading = digitalRead(7);
-
-    if (reading != lastButtonState) {
-      lastDebounceTime = millis();
-    }
-
-    if ((millis() - lastDebounceTime) > debounceDelay) {
-      if (reading != buttonState) {
-        buttonState = reading;
-        if (buttonState == LOW) {
-          mode++;
-          if(mode == 2) mode = 0;
-        }
-      }
-    }
-    
-    lastButtonState = reading;
-
-    if (!demoMode) {
-      if (millis() - lastReceivedTime < requiredInterval) {
-        if (mode == 1) {
-          u8g2.setFont(u8g2_font_profont22_mf);
-          // Check the status of CAN switch 4
-          bool canSwitch4Status = emucan.emu_data.outflags2 & EMUcan::OUTFLAGS2::F_CANSW4;
-          const char* statusText = canSwitch4Status ? "LC1" : "LC2";
-          u8g2.drawUTF8(0, 26, statusText);
-        }
-      } else {
-        u8g2.setDrawColor(1);
-        u8g2.setFont(u8g2_font_profont17_mf);
-        char buffer[20];
-        snprintf(buffer, sizeof(buffer), "NO EMU");
+void loop() {
+  // Process buttons first with reliable debounce
+  handleButtons();
+  
+  // Check CAN messages
+  if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+    emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
+    if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+      lastReceivedTime = millis();
+      
+      // Get current analog input 6 value
+      float currentAnalogIn6 = emucan.emu_data.analogIn6;
+      
+      // Update if changed or first read
+      if (lastAnalogIn6 == -1.0 || abs(currentAnalogIn6 - lastAnalogIn6) >= 0.03) {
+        lastAnalogIn6 = currentAnalogIn6;
+        Serial.print("Analog Input 6: ");
+        Serial.println(currentAnalogIn6);
         
-        u8g2.drawUTF8(0, 26, buffer);
+        // Print the LD level for debugging
+        byte ldNum = getLdNumber(currentAnalogIn6);
+        Serial.print("LD Level: ");
+        Serial.println(ldNum);
+        
+        if (displayState != DISPLAY_OFF) {
+          updateDisplay();
+        }
+      }
+    }
+  }
+  
+  // Check if LC display time is up
+  if (displayState == DISPLAY_LC && (millis() - toggleDisplayTime >= 3000)) {
+    Serial.println("LC display timeout - returning to LD display");
+    displayState = DISPLAY_LD;
+    updateDisplay();
+  }
+  
+  // Regular update at interval
+  unsigned long now = millis();
+  if (now - prevMillis >= 100) {
+    prevMillis = now;
+    if (displayState != DISPLAY_OFF) {
+      updateDisplay();
+    }
+  }
+}
+
+void handleButtons() {
+  // Read toggle button (LC1/LC2) - Active LOW (pressed = LOW)
+  int toggleReading = digitalRead(TOGGLE_BTN_PIN);
+  
+  // Print toggle button state periodically for debugging
+  static unsigned long lastToggleDebugTime = 0;
+  if (millis() - lastToggleDebugTime > 1000) {
+    Serial.print("Toggle button reading: ");
+    Serial.println(toggleReading);
+    lastToggleDebugTime = millis();
+  }
+  
+  // Handle debouncing
+  if (toggleReading != lastToggleBtnState) {
+    lastToggleDbnTime = millis();
+  }
+  
+  if ((millis() - lastToggleDbnTime) > DEBOUNCE_DELAY) {
+    if (toggleReading != toggleBtnState) {
+      toggleBtnState = toggleReading;
+      
+      // Button is pressed (LOW)
+      if (toggleBtnState == LOW) {
+        lcValue = !lcValue;
+        digitalWrite(OUTPUT_PIN, !lcValue);
+        
+        Serial.print("LC Toggle: ");
+        Serial.println(lcValue ? "LC1" : "LC2");
+        
+        // Show LC state for 3 seconds
+        if (displayState != DISPLAY_OFF) {
+          displayState = DISPLAY_LC;
+          toggleDisplayTime = millis();
+          updateDisplay();
+        }
+      }
+    }
+  }
+  lastToggleBtnState = toggleReading;
+  
+  // Read mode button (display on/off)
+  int modeReading = digitalRead(MODE_BTN_PIN);
+  
+  // Handle debouncing
+  if (modeReading != lastModeBtnState) {
+    lastModeDbnTime = millis();
+  }
+  
+  if ((millis() - lastModeDbnTime) > DEBOUNCE_DELAY) {
+    if (modeReading != modeBtnState) {
+      modeBtnState = modeReading;
+      
+      // Button is pressed (LOW)
+      if (modeBtnState == LOW) {
+        // Toggle display state
+        if (displayState == DISPLAY_OFF) {
+          // Turn display on
+          displayState = DISPLAY_LD;
+          Serial.println("Display turned ON");
+          updateDisplay();
+        } else {
+          // Turn display off
+          displayState = DISPLAY_OFF;
+          Serial.println("Display turned OFF");
+          clearDisplay();
+        }
+      }
+    }
+  }
+  lastModeBtnState = modeReading;
+}
+
+// Get LD number based on voltage with deadzone
+byte getLdNumber(float voltage) {
+  // Check each threshold with specific ranges
+  if (voltage < ldThresholds[0]) return 1;
+  if (voltage < ldThresholds[1]) return 2;
+  if (voltage < ldThresholds[2]) return 3;
+  if (voltage < ldThresholds[3]) return 4;
+  if (voltage < ldThresholds[4]) return 5;
+  if (voltage < ldThresholds[5]) return 6;
+  if (voltage < ldThresholds[6]) return 7;
+  
+  // Default to LD8 for anything higher
+  return 8;
+}
+
+void clearDisplay() {
+  u8g2.firstPage();
+  do {
+    // Empty draw - blank screen
+  } while (u8g2.nextPage());
+}
+
+void updateDisplay() {
+  u8g2.firstPage();
+  do {
+    // Check if EMU communication is active
+    if (millis() - lastReceivedTime < 5000) {
+      if (displayState == DISPLAY_LC) {
+        // Display LC1 or LC2 based on toggle state
+        u8g2.setFont(u8g2_font_profont22_mf);
+        u8g2.drawStr(0, 26, lcValue ? "LC1" : "LC2");
+      } else {
+        // Display LD status based on analog value
+        u8g2.setFont(u8g2_font_profont22_mf);
+        
+        // Get LD number based on voltage thresholds
+        byte ldNum = getLdNumber(lastAnalogIn6);
+        
+        // Display LD status
+        char buffer[4] = "LD";
+        buffer[2] = '0' + ldNum;
+        buffer[3] = 0;
+        u8g2.drawStr(0, 26, buffer);
+        
+        // Show voltage in smaller font
+        u8g2.setFont(u8g2_font_4x6_tf);
+        char volt[8];
+        int whole = (int)lastAnalogIn6;
+        int frac = (int)((lastAnalogIn6 - whole) * 100);
+        sprintf(volt, "%d.%02dV", whole, frac);
+        u8g2.drawStr(40, 31, volt);
       }
     } else {
-      if (mode == 1) {
-        char buffer[20];
-        u8g2.setFont(u8g2_font_profont22_mf);
-        float myFloat = 0.81;
-        int whole = (int)myFloat; // Extract whole part
-        int fractional = (int)((myFloat - whole) * 100); // Extract two decimal places
-
-        // Manually construct the floating-point representation
-        snprintf(buffer, sizeof(buffer), "%d.%02d", whole, fractional);
-        u8g2.drawUTF8(0, 26, buffer);
-      }
+      // No EMU communication
+      u8g2.setFont(u8g2_font_profont17_mf);
+      u8g2.drawStr(0, 26, "NO EMU");
     }
-  } while(u8g2.nextPage());
+  } while (u8g2.nextPage());
 }
