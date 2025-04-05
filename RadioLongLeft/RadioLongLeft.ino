@@ -10,11 +10,24 @@ struct can_frame canMsg;
 MCP2515 mcp2515(10); // CS Pin 10
 
 unsigned long previousMillis = 0;
-const long interval = 500;
+const long interval = 100; // Reduced from 500ms to 100ms for faster updates
 
 // NO EMU Display
 unsigned long lastReceivedTime = 0; // Timer to track last received message time
 const unsigned long requiredInterval = 5000; // 5 seconds interval
+
+// Button and Toggle Variables
+unsigned long lastDebounceTime = 0;
+unsigned long lastToggleDebounceTime = 0;
+int lastButtonState = HIGH;
+int buttonState = HIGH;
+int lastToggleButtonState = HIGH;
+int toggleButtonState = HIGH;
+const long debounceDelay = 50; // 50 ms debounce time
+
+// LC value variables - only kept for output pin
+bool toggleValue = false;
+bool previousToggleValue = false;
 
 const bool demoMode = false;
 
@@ -71,13 +84,18 @@ void draw(void) {
 void setup(void) {
   u8g2.begin();
   Serial.begin(9600);
+  
+  // Initialize CAN 
   mcp2515.reset();
   mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
   mcp2515.setNormalMode();
+  
   u8g2_prepare();
-  pinMode(7, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(6, OUTPUT);
+  pinMode(7, INPUT_PULLUP);  // Mode button
+  pinMode(5, INPUT_PULLUP);  // Toggle button
+  pinMode(6, OUTPUT);        // Output pin
+  
+  Serial.println("Setup complete");
 }
 
 void displayTemperature(const char* label, uint16_t tempInt, const char* unit, bool divide) {
@@ -115,116 +133,129 @@ void displayTemperature(const char* label, uint16_t tempInt, const char* unit, b
   u8g2.drawUTF8(unitXPos, 12, buffer); // Adjust the Y position as necessary
 }
 
-bool toggleValue = false;
-
-void loop(void) {
-  
-  u8g2.firstPage();
-  while(u8g2.nextPage()) {
-    static unsigned long lastToggleDebounceTime = 0;
-    static int lastToggleButtonState = HIGH;
-    static int toggleButtonState;
-    const long toggleDebounceDelay = 50; // 50 ms debounce time
-
-    int toggleReading = digitalRead(5);
-
-    if (toggleReading != lastToggleButtonState) {
-      lastToggleDebounceTime = millis();
-    }
-
-    if ((millis() - lastToggleDebounceTime) > toggleDebounceDelay) {
-      if (toggleReading != toggleButtonState) {
-        toggleButtonState = toggleReading;
-        if(lastToggleButtonState == 0) {
-          toggleValue = !toggleValue;
-          digitalWrite(6, !toggleValue);
-          Serial.println("Button Toggled");
-          Serial.println(digitalRead(6));
+void processCanMessages() {
+    // Check for new CAN messages (do this as often as possible)
+    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+        emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
+        if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
+            lastReceivedTime = millis();
+            
+            // Check for CAN switch 4 status (outflags2)
+            bool currentToggleValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW4) > 0;
+            
+            // If LC value changed, update output
+            if (currentToggleValue != previousToggleValue) {
+                toggleValue = currentToggleValue;
+                previousToggleValue = currentToggleValue;
+                digitalWrite(6, !toggleValue);
+                
+                Serial.print("LC Changed from ECU: ");
+                Serial.println(toggleValue ? "LC1" : "LC2");
+            }
         }
-      }
+    }
+}
+
+void handleButtons() {
+    // Read mode button (display modes)
+    int reading = digitalRead(7);
+    
+    if (reading != lastButtonState) {
+        lastDebounceTime = millis();
+    }
+    
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        if (reading != buttonState) {
+            buttonState = reading;
+            if (buttonState == LOW) {
+                mode++;
+                if (mode == 6) mode = 1;
+                Serial.print("Mode changed to: ");
+                Serial.println(mode);
+            }
+        }
+    }
+    
+    lastButtonState = reading;
+    
+    // Read toggle button (kept for manual override if needed)
+    int toggleReading = digitalRead(5);
+    
+    if (toggleReading != lastToggleButtonState) {
+        lastToggleDebounceTime = millis();
+    }
+    
+    if ((millis() - lastToggleDebounceTime) > debounceDelay) {
+        if (toggleReading != toggleButtonState) {
+            toggleButtonState = toggleReading;
+            if (toggleButtonState == LOW && lastToggleButtonState == HIGH) {
+                toggleValue = !toggleValue;
+                digitalWrite(6, !toggleValue);
+                Serial.print("Manual Button Toggle: ");
+                Serial.println(toggleValue ? "LC1" : "LC2");
+            }
+        }
     }
     
     lastToggleButtonState = toggleReading;
-
-    if (x_position > 488) { // Once the bitmap moves off the screen & extra time
-      if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-        emucan.checkEMUcan(canMsg.can_id, canMsg.can_dlc, canMsg.data);
-        if (emucan.EMUcan_Status() == EMUcan_RECEIVED_WITHIN_LAST_SECOND) {
-          lastReceivedTime = millis();
-        }
-      }
-      static unsigned long lastDebounceTime = 0;
-      static int lastButtonState = HIGH;
-      static int buttonState;
-      const long debounceDelay = 50; // 50 ms debounce time
-
-      int reading = digitalRead(7);
-
-      if (reading != lastButtonState) {
-        lastDebounceTime = millis();
-      }
-
-      if ((millis() - lastDebounceTime) > debounceDelay) {
-        if (reading != buttonState) {
-          buttonState = reading;
-          if (buttonState == LOW) {
-            mode++;
-            if(mode == 5) mode = 0;
-          }
-        }
-      }
-      
-      lastButtonState = reading;
-
-      if (!demoMode) {
-        if (millis() - lastReceivedTime < requiredInterval) {
-          if (mode == 1) {
-            displayTemperature("IAT", emucan.emu_data.IAT, "C", false);
-          } else if (mode == 2) {
-            displayTemperature("OILT", emucan.emu_data.oilTemperature, "C", false);
-          } else if (mode == 3) {
-            displayTemperature("OILP", emucan.emu_data.oilPressure * 10, "Bar", true);
-          } else if (mode == 4) {
-            displayTemperature("FUEL", emucan.emu_data.fuelPressure * 10, "Bar", true);
-          }
-        } else {
-          u8g2.setDrawColor(1);
-          char buffer[20];
-          snprintf(buffer, sizeof(buffer), "NO EMU");
-          
-          u8g2.drawUTF8(0, 6, buffer);
-        }
-      } else {
-        if (mode == 1) {
-          displayTemperature("IAT", 29, "C", false);
-        } else if (mode == 2) {
-          displayTemperature("OILT", 114, "C", false);
-        } else if (mode == 3) {
-          displayTemperature("OIL", 1.5 * 10, "Bar", true);
-        } else if (mode == 4) {
-          displayTemperature("GAS", 1.3 * 10, "Bar", true);
-        }
-      }
-    } else {
-      draw();
-      x_position += 2; // Move the bitmap to the right
-      delay(30);
-    }
-  }
 }
 
-
-/* 
-* Links
-* IAT
-* OIL TEMP
-* OIL PRESSURE
-* FUEL PRESSURE
-* 
-* Rechts
-* WATER TEMP CLT
-* EGT1
-* EGT2
-* MAP
-* 
-**/
+void loop(void) {
+    // Check for CAN messages frequently - do this outside the display loop!
+    processCanMessages();
+    
+    // Handle button inputs
+    handleButtons();
+    
+    // Update display at regular intervals
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+        previousMillis = currentMillis;
+        
+        u8g2.firstPage();
+        do {
+            if (x_position > 488) { // Once the bitmap moves off the screen & extra time
+                if (!demoMode) {
+                    if (millis() - lastReceivedTime < requiredInterval) {
+                        // Display based on mode
+                        if (mode == 1) {
+                            displayTemperature("IAT", emucan.emu_data.IAT, "C", false);
+                        } else if (mode == 2) {
+                            displayTemperature("OILT", emucan.emu_data.oilTemperature, "C", false);
+                        } else if (mode == 3) {
+                            displayTemperature("OILP", emucan.emu_data.oilPressure * 10, "Bar", true);
+                        } else if (mode == 4) {
+                            displayTemperature("FUEL", emucan.emu_data.fuelPressure * 10, "Bar", true);
+                        } else if (mode == 5) {
+                            // Mode 5 - Display off (just draw nothing)
+                        }
+                    } else {
+                        u8g2.setDrawColor(1);
+                        u8g2.setFont(u8g2_font_profont22_mf);
+                        u8g2.drawUTF8(0, 8, "NO EMU");
+                    }
+                } else {
+                    // Demo mode display
+                    if (mode == 1) {
+                        displayTemperature("IAT", 29, "C", false);
+                    } else if (mode == 2) {
+                        displayTemperature("OILT", 114, "C", false);
+                    } else if (mode == 3) {
+                        displayTemperature("OIL", 15, "Bar", true);
+                    } else if (mode == 4) {
+                        displayTemperature("GAS", 13, "Bar", true);
+                    } else if (mode == 5) {
+                        // Mode 5 - Display off (just draw nothing)
+                    }
+                }
+            } else {
+                draw();
+            }
+        } while (u8g2.nextPage());
+        
+        if (x_position <= 488) {
+            x_position += 3; // Move the bitmap to the right
+            delay(30);
+        }
+    }
+}

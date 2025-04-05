@@ -21,7 +21,6 @@ unsigned long toggleDisplayTime = 0;
 
 // Button constants
 #define MODE_BTN_PIN 7     // Button to toggle display on/off
-#define TOGGLE_BTN_PIN 5   // Button to toggle between LC1/LC2
 #define OUTPUT_PIN 6
 #define DEBOUNCE_DELAY 50
 
@@ -36,13 +35,11 @@ enum DisplayState {
 float lastAnalogIn6 = -1.0;
 DisplayState displayState = DISPLAY_LD; // Start with LD display on
 bool lcValue = false;      // LC state (false = LC2, true = LC1)
+bool previousLcValue = false; // Store previous LC value to detect changes
 
 // Button states
-int toggleBtnState = HIGH;
-int lastToggleBtnState = HIGH;
 int modeBtnState = HIGH;
 int lastModeBtnState = HIGH;
-unsigned long lastToggleDbnTime = 0;
 unsigned long lastModeDbnTime = 0;
 
 // LD threshold values adjusted for sensor offset
@@ -64,13 +61,9 @@ void setup(void) {
   
   // Setup pins - explicit INPUT_PULLUP
   pinMode(MODE_BTN_PIN, INPUT_PULLUP);
-  pinMode(TOGGLE_BTN_PIN, INPUT_PULLUP);
   pinMode(OUTPUT_PIN, OUTPUT);
   
   // Initial pin state check and debug
-  Serial.print("Initial TOGGLE pin state: ");
-  Serial.println(digitalRead(TOGGLE_BTN_PIN));
-  
   Serial.print("Initial MODE pin state: ");
   Serial.println(digitalRead(MODE_BTN_PIN));
   
@@ -78,8 +71,8 @@ void setup(void) {
 }
 
 void loop() {
-  // Process buttons first with reliable debounce
-  handleButtons();
+  // Process mode button for display on/off
+  handleModeButton();
   
   // Check CAN messages
   if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
@@ -90,7 +83,27 @@ void loop() {
       // Get current analog input 6 value
       float currentAnalogIn6 = emucan.emu_data.analogIn6;
       
-      // Update if changed or first read
+      // Check for LC value change from ECU (CAN switch 4 status)
+      bool currentLcValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW4) > 0;
+      
+      // If LC value changed, update display and output
+      if (currentLcValue != previousLcValue) {
+        lcValue = currentLcValue;
+        previousLcValue = currentLcValue;
+        digitalWrite(OUTPUT_PIN, !lcValue);
+        
+        Serial.print("LC Changed from ECU: ");
+        Serial.println(lcValue ? "LC1" : "LC2");
+        
+        // Show LC state for 3 seconds
+        if (displayState != DISPLAY_OFF) {
+          displayState = DISPLAY_LC;
+          toggleDisplayTime = millis();
+          updateDisplay();
+        }
+      }
+      
+      // Update if analog value changed or first read
       if (lastAnalogIn6 == -1.0 || abs(currentAnalogIn6 - lastAnalogIn6) >= 0.03) {
         lastAnalogIn6 = currentAnalogIn6;
         Serial.print("Analog Input 6: ");
@@ -125,46 +138,7 @@ void loop() {
   }
 }
 
-void handleButtons() {
-  // Read toggle button (LC1/LC2) - Active LOW (pressed = LOW)
-  int toggleReading = digitalRead(TOGGLE_BTN_PIN);
-  
-  // Print toggle button state periodically for debugging
-  static unsigned long lastToggleDebugTime = 0;
-  if (millis() - lastToggleDebugTime > 1000) {
-    Serial.print("Toggle button reading: ");
-    Serial.println(toggleReading);
-    lastToggleDebugTime = millis();
-  }
-  
-  // Handle debouncing
-  if (toggleReading != lastToggleBtnState) {
-    lastToggleDbnTime = millis();
-  }
-  
-  if ((millis() - lastToggleDbnTime) > DEBOUNCE_DELAY) {
-    if (toggleReading != toggleBtnState) {
-      toggleBtnState = toggleReading;
-      
-      // Button is pressed (LOW)
-      if (toggleBtnState == LOW) {
-        lcValue = !lcValue;
-        digitalWrite(OUTPUT_PIN, !lcValue);
-        
-        Serial.print("LC Toggle: ");
-        Serial.println(lcValue ? "LC1" : "LC2");
-        
-        // Show LC state for 3 seconds
-        if (displayState != DISPLAY_OFF) {
-          displayState = DISPLAY_LC;
-          toggleDisplayTime = millis();
-          updateDisplay();
-        }
-      }
-    }
-  }
-  lastToggleBtnState = toggleReading;
-  
+void handleModeButton() {
   // Read mode button (display on/off)
   int modeReading = digitalRead(MODE_BTN_PIN);
   
@@ -225,7 +199,7 @@ void updateDisplay() {
     // Check if EMU communication is active
     if (millis() - lastReceivedTime < 5000) {
       if (displayState == DISPLAY_LC) {
-        // Display LC1 or LC2 based on toggle state
+        // Display LC1 or LC2 based on ECU value
         u8g2.setFont(u8g2_font_profont22_mf);
         u8g2.drawStr(0, 26, lcValue ? "LC1" : "LC2");
       } else {
@@ -240,14 +214,6 @@ void updateDisplay() {
         buffer[2] = '0' + ldNum;
         buffer[3] = 0;
         u8g2.drawStr(0, 26, buffer);
-        
-        // Show voltage in smaller font
-        u8g2.setFont(u8g2_font_4x6_tf);
-        char volt[8];
-        int whole = (int)lastAnalogIn6;
-        int frac = (int)((lastAnalogIn6 - whole) * 100);
-        sprintf(volt, "%d.%02dV", whole, frac);
-        u8g2.drawStr(40, 31, volt);
       }
     } else {
       // No EMU communication
