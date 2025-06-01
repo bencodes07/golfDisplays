@@ -16,28 +16,22 @@ const int numPositions = 6;
 const int positionPins[numPositions] = {2, 3, 4, 5, 6, 7};
 const int upshiftPin = 8;
 const int downshiftPin = 9;
-<<<<<<< HEAD
 const int relayPin = 12;
 
 unsigned long lastPositionChangeTime = 0;
 const unsigned long positionChangeDelay = 400;
-=======
 
 unsigned long lastPositionChangeTime = 0;
-const unsigned long positionChangeDelay = 400; // Adjust this value as needed
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
+const unsigned long positionChangeDelay = 400;
 
 void setup()
 {
   for (int i = 2; i <= 9; i++) {
     pinMode(i, INPUT_PULLUP);
   }
-<<<<<<< HEAD
   pinMode(relayPin, OUTPUT);
   digitalWrite(relayPin, LOW);
   
-=======
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
   Serial.begin(9600);
   Wire.begin();
   dac.begin(I2C_ADDR);
@@ -68,8 +62,6 @@ void setVoltageForPosition(GearPosition position) {
   }
 
   dac.setVoltage(voltage * refV / 5.0, false);
-<<<<<<< HEAD
-  
   if (position == R) {
     digitalWrite(relayPin, LOW);
     Serial.println("R selected - Reverse lights ON");
@@ -78,10 +70,6 @@ void setVoltageForPosition(GearPosition position) {
     Serial.print(positionName);
     Serial.println(" selected");
   }
-=======
-  Serial.print(positionName);
-  Serial.println(" selected");
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
 }
 
 void handleManualShifting() {
@@ -93,11 +81,7 @@ void handleManualShifting() {
     upshiftPressed = true;
     Serial.println("Upshift pressed");
   } else if (digitalRead(upshiftPin) == HIGH && upshiftPressed) {
-<<<<<<< HEAD
     setVoltageForPosition(M);
-=======
-    setVoltageForPosition(M);  // Reset to M position voltage
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
     upshiftPressed = false;
   }
 
@@ -106,11 +90,7 @@ void handleManualShifting() {
     downshiftPressed = true;
     Serial.println("Downshift pressed");
   } else if (digitalRead(downshiftPin) == HIGH && downshiftPressed) {
-<<<<<<< HEAD
     setVoltageForPosition(M);
-=======
-    setVoltageForPosition(M);  // Reset to M position voltage
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
     downshiftPressed = false;
   }
 }
@@ -129,10 +109,6 @@ void loop()
     setVoltageForPosition(currentPosition);
   }
   
-<<<<<<< HEAD
-=======
-  // Handle manual shifting immediately, without delay
->>>>>>> b23ee05fef0f1f0af682fb26dceb0608c8994b7f
   if (currentPosition == M) {
     handleManualShifting();
   }
