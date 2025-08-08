@@ -86,7 +86,7 @@ void setup(void) {
   pinMode(5, INPUT_PULLUP);  // Toggle button (kept for compatibility)
   
   u8g2_prepare();
-  delay(6300);
+  delay(7500);
   
   Serial.println("Setup complete");
 }
@@ -164,7 +164,7 @@ void loop(void) {
             
             lastToggleButtonState = toggleReading;
 
-            if (x_position > 168) { // Once the bitmap moves off the screen
+            if (x_position > 135) { // Once the bitmap moves off the screen
                 // Handle mode button
                 static unsigned long lastDebounceTime = 0;
                 static int lastButtonState = HIGH;
@@ -227,7 +227,7 @@ void loop(void) {
             }
         }
         
-        if (x_position <= 168) {
+        if (x_position <= 135) {
             x_position += 3; // Move the bitmap to the right
             delay(30);
         }

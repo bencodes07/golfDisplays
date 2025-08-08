@@ -3,7 +3,6 @@
 #include <U8g2lib.h>
 #include <avr/pgmspace.h>
 
-// Use a more memory-efficient display configuration
 U8G2_SSD1306_64X32_NONAME_F_HW_I2C u8g2(U8G2_R0);
 
 // EmuCan
@@ -14,17 +13,14 @@ EMUcan emucan(0x600); // Base ID 600 --> See EMU settings
 struct can_frame canMsg;
 MCP2515 mcp2515(10); // CS Pin 10
 
-// Timing constants
 unsigned long prevMillis = 0;
 unsigned long lastReceivedTime = 0;
 unsigned long toggleDisplayTime = 0;
 
-// Button constants
 #define MODE_BTN_PIN 7     // Button to toggle display on/off
 #define OUTPUT_PIN 6
 #define DEBOUNCE_DELAY 50
 
-// Display states
 enum DisplayState {
   DISPLAY_OFF,
   DISPLAY_LD,
@@ -34,7 +30,7 @@ enum DisplayState {
 // Last values
 float lastAnalogIn6 = -1.0;
 DisplayState displayState = DISPLAY_LD; // Start with LD display on
-bool lcValue = false;      // LC state (false = LC2, true = LC1)
+bool lcValue = true;      // LC state (false = LC2, true = LC1)
 bool previousLcValue = false; // Store previous LC value to detect changes
 
 // Button states
@@ -84,7 +80,7 @@ void loop() {
       float currentAnalogIn6 = emucan.emu_data.analogIn6;
       
       // Check for LC value change from ECU (CAN switch 4 status)
-      bool currentLcValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW4) > 0;
+      bool currentLcValue = (emucan.emu_data.outflags3 & EMUcan::F_SW2) > 0;
       
       // If LC value changed, update display and output
       if (currentLcValue != previousLcValue) {
@@ -93,7 +89,7 @@ void loop() {
         digitalWrite(OUTPUT_PIN, !lcValue);
         
         Serial.print("LC Changed from ECU: ");
-        Serial.println(lcValue ? "LC1" : "LC2");
+        Serial.println(lcValue ? "LC2" : "LC1");
         
         // Show LC state for 3 seconds
         if (displayState != DISPLAY_OFF) {
@@ -201,7 +197,7 @@ void updateDisplay() {
       if (displayState == DISPLAY_LC) {
         // Display LC1 or LC2 based on ECU value
         u8g2.setFont(u8g2_font_profont22_mf);
-        u8g2.drawStr(0, 26, lcValue ? "LC1" : "LC2");
+        u8g2.drawStr(0, 26, lcValue ? "LC2" : "LC1");
       } else {
         // Display LD status based on analog value
         u8g2.setFont(u8g2_font_profont22_mf);

@@ -216,7 +216,7 @@
           
           u8g2.firstPage();
           do {
-              if (x_position > 488) { // Once the bitmap moves off the screen & extra time
+              if (x_position > 360) { // Once the bitmap moves off the screen & extra time
                   if (!demoMode) {
                       if (millis() - lastReceivedTime < requiredInterval) {
                           // Display based on mode
@@ -255,7 +255,7 @@
               }
           } while (u8g2.nextPage());
           
-          if (x_position <= 488) {
+          if (x_position <= 360) {
               x_position += 3; // Move the bitmap to the right
               delay(30);
           }
