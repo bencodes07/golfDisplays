@@ -98,7 +98,7 @@
     Serial.println("Setup complete");
   }
 
-  void displayTemperature(const char* label, uint16_t tempInt, const char* unit, bool divide) {
+  void displayTemperature(const char* label, uint16_t tempInt, const char* unit, bool divide, int decimals = 1) {
     char buffer[30]; // Increase buffer size if necessary
 
     // Set the font for the label and temperature
@@ -106,16 +106,17 @@
 
     int labelTempLen;
     if (divide) {
-      // When dividing, we treat the integer as a floating-point number with one decimal place
-      float tempFloat = tempInt / 10.0; // Use 10.0 to move the decimal one place to the left
-      int whole = (int)tempFloat;
-      int fractional = abs((int)((tempFloat - whole) * 10)); // Get the fractional part, multiplied to become a single digit
-
-      // Use snprintf to format the string, separating the whole and fractional parts for display
-      labelTempLen = snprintf(buffer, sizeof(buffer), "%s: %d.%d", label, whole, fractional);
+        float tempFloat = tempInt / 10.0;
+        int whole = (int)tempFloat;
+        if (decimals == 2) {
+            int fractional = abs((int)((tempFloat - whole) * 100));
+            labelTempLen = snprintf(buffer, sizeof(buffer), "%s: %d.%02d", label, whole, fractional);
+        } else {
+            int fractional = abs((int)((tempFloat - whole) * 10));
+            labelTempLen = snprintf(buffer, sizeof(buffer), "%s: %d.%d", label, whole, fractional);
+        }
     } else {
-      // If not dividing, display as a normal integer
-      labelTempLen = snprintf(buffer, sizeof(buffer), "%s: %d", label, tempInt);
+        labelTempLen = snprintf(buffer, sizeof(buffer), "%s: %d", label, tempInt);
     }
 
     u8g2.drawUTF8(0, 10, buffer); // Adjust X, Y positions as needed
@@ -169,7 +170,7 @@
               buttonState = reading;
               if (buttonState == LOW) {
                   mode++;
-                  if (mode == 6) mode = 1;
+                  if (mode == 7) mode = 1;
                   Serial.print("Mode changed to: ");
                   Serial.println(mode);
               }
@@ -229,6 +230,8 @@
                           } else if (mode == 4) {
                               displayTemperature("FUEL", emucan.emu_data.fuelPressure * 10, "Bar", true);
                           } else if (mode == 5) {
+                              displayTemperature("AFR", emucan.emu_data.wboLambda * 10, "", true, 2);
+                          } else if (mode == 6) {
                               // Mode 5 - Display off (just draw nothing)
                           }
                       } else {
@@ -247,6 +250,8 @@
                       } else if (mode == 4) {
                           displayTemperature("GAS", 13, "Bar", true);
                       } else if (mode == 5) {
+                          displayTemperature("AFR", 94, "", true, 2);
+                      } else if (mode == 6) {
                           // Mode 5 - Display off (just draw nothing)
                       }
                   }
