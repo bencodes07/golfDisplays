@@ -117,7 +117,7 @@ void loop(void) {
             lastReceivedTime = millis();
             
             // Check for CAN switch 4 status (outflags2)
-            bool currentToggleValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW4) > 0;
+            bool currentToggleValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW3) > 0;
             
             // If LC value changed, update output
             if (currentToggleValue != previousToggleValue) {

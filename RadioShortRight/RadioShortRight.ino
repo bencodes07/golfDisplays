@@ -39,7 +39,7 @@ int lastModeBtnState = HIGH;
 unsigned long lastModeDbnTime = 0;
 
 // LD threshold values adjusted for sensor offset
-const float ldThresholds[] = {1.05, 1.58, 2.05, 2.65, 3.15, 3.75, 4.35, 4.9};
+const float ldThresholds[] = {1.00, 1.48, 2.05, 2.55, 3.10, 3.64, 4.17, 4.9};
 
 void setup(void) {
   Serial.begin(9600);
@@ -80,7 +80,7 @@ void loop() {
       float currentAnalogIn6 = emucan.emu_data.analogIn6;
       
       // Check for LC value change from ECU (CAN switch 4 status)
-      bool currentLcValue = (emucan.emu_data.outflags3 & EMUcan::F_SW2) > 0;
+      bool currentLcValue = (emucan.emu_data.outflags2 & EMUcan::F_CANSW3) > 0;
       
       // If LC value changed, update display and output
       if (currentLcValue != previousLcValue) {
